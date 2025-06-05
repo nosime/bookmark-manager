@@ -1,0 +1,578 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// PHẦN 1: CƠ SỞ - NGƯỜI DÙNG VÀ VAI TRÒ
+// =============================================================================
+
+model User {
+  id                  String    @id @default(cuid())
+  clerkId             String    @unique
+  username            String    @unique
+  email               String    @unique
+  firstName           String?
+  lastName            String?
+  avatarUrl           String?
+  bio                 String?
+  allowGlobalPublic   Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  lastLogin           DateTime?
+  isActive            Boolean   @default(true)
+  isDeleted           Boolean   @default(false)
+  deletedAt           DateTime?
+
+  // Relations
+  roles               UserRole[]
+  folders             Folder[]
+  bookmarks           Bookmark[]
+  tags                Tag[]
+  favorites           Favorite[]
+  deletedItemsLog     DeletedItemsLog[]
+  verifications       UserVerification?
+  privacySettings     PrivacySettings?
+  userPreferences     UserPreferences?
+  apiKeys             ApiKey[]
+  publicFoldersCreated PublicFolder[] @relation("PublicFolderCreatedBy")
+  publicBookmarksCreated PublicBookmark[] @relation("PublicBookmarkCreatedBy")
+
+  @@map("users")
+}
+
+model Role {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?
+  createdAt       DateTime @default(now())
+
+  // Relations
+  users           UserRole[]
+  verificationTypes VerificationType[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId      String
+  roleId      String
+  assignedAt  DateTime @default(now())
+  assignedBy  String?
+
+  // Relations
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+// =============================================================================
+// PHẦN 2: CẤU TRÚC LƯU TRỮ - THƯ MỤC VÀ BOOKMARK
+// =============================================================================
+
+model Folder {
+  id                    String    @id @default(cuid())
+  userId                String
+  name                  String
+  parentFolderId        String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  isVisibleOnProfile    Boolean   @default(true)
+  inheritVisibility     Boolean   @default(true)
+  isPasswordProtected   Boolean   @default(false)
+  password              String?
+  passwordHint          String?
+  icon                  String?
+  color                 String?
+  displayOrder          Int       @default(0)
+  isDeleted             Boolean   @default(false)
+  deletedAt             DateTime?
+
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id])
+  parentFolder          Folder?   @relation("FolderHierarchy", fields: [parentFolderId], references: [id])
+  childFolders          Folder[]  @relation("FolderHierarchy")
+  bookmarks             Bookmark[]
+  publicFolders         PublicFolder[]
+
+  @@map("folders")
+}
+
+model Bookmark {
+  id                    String    @id @default(cuid())
+  userId                String
+  folderId              String?
+  title                 String
+  url                   String
+  description           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  viewCount             Int       @default(0)
+  allowGlobalPublic     Boolean   @default(false)
+  isAdultContent        Boolean   @default(false)
+  accessLevel           String    @default("FREE")
+  accessLevelColor      String    @default("#808080")
+  backgroundColor       String    @default("#FFFFFF")
+  textColor             String    @default("#000000")
+  backgroundImageUrl    String?
+  isGradient            Boolean   @default(false)
+  gradientEndColor      String?
+  faviconUrl            String?
+  thumbnailUrl          String?
+  isDeleted             Boolean   @default(false)
+  deletedAt             DateTime?
+  deletedBy             String?
+  restoreAvailableUntil DateTime?
+
+  // Relations
+  user                  User      @relation(fields: [userId], references: [id])
+  folder                Folder?   @relation(fields: [folderId], references: [id])
+  tags                  BookmarkTag[]
+  favorites             Favorite[]
+  globalCategories      BookmarkGlobalCategory[]
+  showcase              BookmarkShowcase[]
+  publicBookmarks       PublicBookmark[]
+
+  @@map("bookmarks")
+}
+
+model Tag {
+  id              String    @id @default(cuid())
+  userId          String
+  name            String
+  color           String    @default("#808080")
+  textColor       String    @default("#FFFFFF")
+  createdAt       DateTime  @default(now())
+  useCount        Int       @default(0)
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id])
+  bookmarks       BookmarkTag[]
+
+  @@unique([userId, name])
+  @@map("tags")
+}
+
+model BookmarkTag {
+  bookmarkId      String
+  tagId           String
+  addedAt         DateTime  @default(now())
+
+  // Relations
+  bookmark        Bookmark  @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+  tag             Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([bookmarkId, tagId])
+  @@map("bookmark_tags")
+}
+
+model Favorite {
+  userId          String
+  bookmarkId      String
+  addedAt         DateTime  @default(now())
+  notes           String?
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookmark        Bookmark  @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+
+  @@id([userId, bookmarkId])
+  @@map("favorites")
+}
+
+model DeletedItemsLog {
+  id              String    @id @default(cuid())
+  itemType        String
+  itemId          String
+  userId          String
+  deletedBy       String
+  deletedAt       DateTime  @default(now())
+  restoreDeadline DateTime?
+  reason          String?
+  additionalInfo  String?
+  wasRestored     Boolean   @default(false)
+  restoredAt      DateTime?
+  restoredBy      String?
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@map("deleted_items_log")
+}
+
+// =============================================================================
+// PHẦN 3: CHIA SẺ VÀ TRUY CẬP CÔNG KHAI
+// =============================================================================
+
+model PublicFolder {
+  id              String    @id @default(cuid())
+  folderId        String
+  publicLink      String    @unique
+  isPublic        Boolean   @default(true)
+  password        String?
+  expirationDate  DateTime?
+  createdAt       DateTime  @default(now())
+  createdBy       String
+  allowDownload   Boolean   @default(false)
+  viewCount       Int       @default(0)
+  lastAccessed    DateTime?
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+
+  // Relations
+  folder          Folder    @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  creator         User      @relation("PublicFolderCreatedBy", fields: [createdBy], references: [id])
+  accessLogs      PublicAccessLog[]
+
+  @@map("public_folders")
+}
+
+model PublicBookmark {
+  id              String    @id @default(cuid())
+  bookmarkId      String
+  publicLink      String    @unique
+  isPublic        Boolean   @default(true)
+  password        String?
+  expirationDate  DateTime?
+  createdAt       DateTime  @default(now())
+  createdBy       String
+  isFeatured      Boolean   @default(false)
+  viewCount       Int       @default(0)
+  lastAccessed    DateTime?
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+
+  // Relations
+  bookmark        Bookmark  @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+  creator         User      @relation("PublicBookmarkCreatedBy", fields: [createdBy], references: [id])
+  accessLogs      PublicAccessLog[]
+
+  @@map("public_bookmarks")
+}
+
+model PublicAccessLog {
+  id                  String    @id @default(cuid())
+  publicFolderId      String?
+  publicBookmarkId    String?
+  accessTime          DateTime  @default(now())
+  ipAddress           String?
+  userAgent           String?
+  referrerUrl         String?
+  countryCode         String?
+  accessDurationMs    Int?
+  isDownload          Boolean   @default(false)
+
+  // Relations
+  publicFolder        PublicFolder?   @relation(fields: [publicFolderId], references: [id], onDelete: Cascade)
+  publicBookmark      PublicBookmark? @relation(fields: [publicBookmarkId], references: [id], onDelete: Cascade)
+
+  @@map("public_access_logs")
+}
+
+// =============================================================================
+// PHẦN 4: PHÂN LOẠI VÀ QUẢN LÝ DANH MỤC
+// =============================================================================
+
+model GlobalCategory {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  slug            String    @unique
+  description     String?
+  color           String    @default("#808080")
+  icon            String?
+  parentCategoryId String?
+  displayOrder    Int       @default(0)
+  isActive        Boolean   @default(true)
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  parentCategory  GlobalCategory? @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id])
+  childCategories GlobalCategory[] @relation("CategoryHierarchy")
+  bookmarks       BookmarkGlobalCategory[]
+
+  @@map("global_categories")
+}
+
+model BookmarkGlobalCategory {
+  bookmarkId      String
+  categoryId      String
+  addedBy         String
+  addedAt         DateTime  @default(now())
+  isPrimary       Boolean   @default(false)
+
+  // Relations
+  bookmark        Bookmark        @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+  category        GlobalCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([bookmarkId, categoryId])
+  @@map("bookmark_global_categories")
+}
+
+model BookmarkShowcase {
+  id              String    @id @default(cuid())
+  bookmarkId      String
+  showcaseOrder   Int       @default(0)
+  showcaseType    String    @default("FEATURED")
+  showcaseTitle   String?
+  showcaseDescription String?
+  startDate       DateTime  @default(now())
+  endDate         DateTime?
+  addedBy         String
+  addedAt         DateTime  @default(now())
+  isActive        Boolean   @default(true)
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+
+  // Relations
+  bookmark        Bookmark  @relation(fields: [bookmarkId], references: [id], onDelete: Cascade)
+
+  @@map("bookmark_showcase")
+}
+
+// =============================================================================
+// PHẦN 5: CÀI ĐẶT VÀ TÙY CHỌN
+// =============================================================================
+
+model PrivacySettings {
+  userId                      String    @id
+  defaultBookmarkVisibility   Boolean   @default(false)
+  defaultFolderVisibility     Boolean   @default(false)
+  allowDiscovery              Boolean   @default(false)
+  showViewsCount              Boolean   @default(true)
+  showInRecent                Boolean   @default(true)
+  showEmail                   Boolean   @default(false)
+  allowIndexing               Boolean   @default(false)
+  twoFactorAuth               Boolean   @default(false)
+  activityTrackingLevel       Int       @default(1)
+  deletedItemsRetentionDays   Int       @default(30)
+  updatedAt                   DateTime  @updatedAt
+
+  // Relations
+  user                        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("privacy_settings")
+}
+
+model UserPreferences {
+  userId              String    @id
+  theme               String    @default("light")
+  language            String    @default("vi")
+  timezone            String    @default("Asia/Ho_Chi_Minh")
+  dateFormat          String    @default("dd/MM/yyyy")
+  itemsPerPage        Int       @default(20)
+  defaultView         String    @default("grid")
+  bookmarkSortBy      String    @default("date_desc")
+  showDeletedItems    Boolean   @default(true)
+  emailNotifications  Boolean   @default(true)
+  pushNotifications   Boolean   @default(false)
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+// =============================================================================
+// PHẦN 6: HỆ THỐNG TÍCH XANH (VERIFICATION SYSTEM)
+// =============================================================================
+
+model VerificationType {
+  id                  String    @id @default(cuid())
+  name                String    @unique
+  code                String    @unique
+  description         String?
+  iconUrl             String
+  color               String    @default("#1DA1F2")
+  textColor           String    @default("#FFFFFF")
+  criteria            String?
+  displayOrder        Int       @default(0)
+  createdAt           DateTime  @default(now())
+  createdBy           String
+  requiredRoleId      String?
+  isActive            Boolean   @default(true)
+  isDeleted           Boolean   @default(false)
+  deletedAt           DateTime?
+
+  // Relations
+  requiredRole        Role?     @relation(fields: [requiredRoleId], references: [id])
+  userVerifications   UserVerification[]
+  verificationHistory VerificationHistory[]
+
+  @@map("verification_types")
+}
+
+model UserVerification {
+  userId              String    @id
+  verificationTypeId  String
+  verificationDate    DateTime  @default(now())
+  verifiedBy          String
+  verificationUrl     String?
+  verificationNote    String?
+  isActive            Boolean   @default(true)
+  expiryDate          DateTime?
+  lastUpdated         DateTime  @updatedAt
+  lastUpdatedBy       String?
+
+  // Relations
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verificationType    VerificationType  @relation(fields: [verificationTypeId], references: [id])
+
+  @@map("user_verifications")
+}
+
+model VerificationHistory {
+  id                  String    @id @default(cuid())
+  userId              String
+  verificationTypeId  String
+  actionType          String
+  actionDate          DateTime  @default(now())
+  actionBy            String
+  previousTypeId      String?
+  actionReason        String?
+
+  // Relations
+  verificationType    VerificationType @relation(fields: [verificationTypeId], references: [id])
+
+  @@map("verification_history")
+}
+
+// =============================================================================
+// PHẦN 7: HỆ THỐNG API KEY
+// =============================================================================
+
+model ApiKeyPermission {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  code            String    @unique
+  description     String?
+  displayOrder    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  isActive        Boolean   @default(true)
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+
+  // Relations
+  apiKeyMappings  ApiKeyPermissionMap[]
+  usageLogs       ApiKeyUsageLog[]
+
+  @@map("api_key_permissions")
+}
+
+model ApiKeyScope {
+  id              String    @id @default(cuid())
+  name            String    @unique
+  code            String    @unique
+  description     String?
+  displayOrder    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  isActive        Boolean   @default(true)
+  isDeleted       Boolean   @default(false)
+  deletedAt       DateTime?
+
+  // Relations
+  apiKeyMappings  ApiKeyPermissionMap[]
+  usageLogs       ApiKeyUsageLog[]
+
+  @@map("api_key_scopes")
+}
+
+model ApiKey {
+  id                  String    @id @default(cuid())
+  userId              String
+  name                String
+  keyValue            String    @unique
+  keyHash             String    @unique
+  keyPrefix           String
+  secretKey           String?
+  createdAt           DateTime  @default(now())
+  lastUsedAt          DateTime?
+  expiresAt           DateTime?
+  isActive            Boolean   @default(true)
+  isDeleted           Boolean   @default(false)
+  deletedAt           DateTime?
+  deletedBy           String?
+  rateLimit           Int       @default(1000)
+  rateLimitWindow     Int       @default(3600)
+  allowedIps          String?
+  allowedDomains      String?
+  notes               String?
+
+  // Relations
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions         ApiKeyPermissionMap[]
+  usageLogs           ApiKeyUsageLog[]
+  rateLimits          ApiKeyRateLimit[]
+
+  @@map("api_keys")
+}
+
+model ApiKeyPermissionMap {
+  apiKeyId        String
+  permissionId    String
+  scopeId         String
+  grantedAt       DateTime  @default(now())
+  grantedBy       String?
+
+  // Relations
+  apiKey          ApiKey          @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  permission      ApiKeyPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  scope           ApiKeyScope     @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@id([apiKeyId, permissionId, scopeId])
+  @@map("api_key_permission_maps")
+}
+
+model ApiKeyUsageLog {
+  id              String    @id @default(cuid())
+  apiKeyId        String
+  requestDate     DateTime  @default(now())
+  endpoint        String
+  method          String
+  scopeId         String?
+  permissionId    String?
+  ipAddress       String?
+  userAgent       String?
+  requestParams   String?
+  responseCode    Int
+  responseTimeMs  Int?
+  responseSizeBytes Int?
+  errorMessage    String?
+  isSuccess       Boolean   @default(true)
+
+  // Relations
+  apiKey          ApiKey            @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  scope           ApiKeyScope?      @relation(fields: [scopeId], references: [id])
+  permission      ApiKeyPermission? @relation(fields: [permissionId], references: [id])
+
+  @@map("api_key_usage_logs")
+}
+
+model ApiKeyRateLimit {
+  id                      String    @id @default(cuid())
+  apiKeyId                String
+  windowStart             DateTime
+  windowEnd               DateTime
+  requestCount            Int       @default(1)
+  lastRequestAt           DateTime  @default(now())
+  windowDurationSeconds   Int
+
+  // Relations
+  apiKey                  ApiKey    @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@map("api_key_rate_limits")
+}
