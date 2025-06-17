@@ -1,4 +1,4 @@
-name: Next Deployment
+name: Deploy Bookmark Manager
 
 on:
   push:
@@ -16,11 +16,64 @@ jobs:
         password: ${{ secrets.PASSWORD }}
         port: 22
         script: |
-          cd /root/services/deploy-next-docker
+          # Navigate to project directory
+          cd /root/services/bookmark-manager
+          
+          # Pull latest code
           git fetch origin
           git checkout production
           git pull
-          docker build -t my-blog .
-          docker stop my-blog || true
-          docker rm my-blog || true
-          docker run -d --name my-blog --network opt_cloudflare_network -p 4000:3000 my-blog
+          
+          # Build image với secret keys từ GitHub Secrets
+          docker build \
+            --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" \
+            --build-arg CLERK_SECRET_KEY="${{ secrets.CLERK_SECRET_KEY }}" \
+            -t bookmark-manager:latest .
+          
+          # Stop và remove containers cũ
+          docker stop bookmark-app bookmark-postgres || true
+          docker rm bookmark-app bookmark-postgres || true
+          
+          # Start PostgreSQL
+          docker run -d \
+            --name bookmark-postgres \
+            --restart unless-stopped \
+            -e POSTGRES_DB=bookmark_manager \
+            -e POSTGRES_USER=bookmark_user \
+            -e POSTGRES_PASSWORD=bookmark123 \
+            -p 5432:5432 \
+            -v bookmark_postgres_data:/var/lib/postgresql/data \
+            postgres:16-alpine
+          
+          # Wait for PostgreSQL
+          sleep 15
+          
+          # Start Application với runtime secrets
+          docker run -d \
+            --name bookmark-app \
+            --restart unless-stopped \
+            -p 4000:3000 \
+            -e NODE_ENV=production \
+            -e DATABASE_URL="postgresql://bookmark_user:bookmark123@localhost:5432/bookmark_manager" \
+            -e NEXT_PUBLIC_APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}" \
+            -e NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" \
+            -e CLERK_SECRET_KEY="${{ secrets.CLERK_SECRET_KEY }}" \
+            -e NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in \
+            -e NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up \
+            -e NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/dashboard \
+            -e NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/dashboard \
+            -e NEXT_TELEMETRY_DISABLED=1 \
+            -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            -e SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+            --network host \
+            bookmark-manager:latest
+          
+          # Wait and verify deployment
+          sleep 20
+          if curl -f http://localhost:4000/api/health; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+            docker logs bookmark-app --tail 20
+            exit 1
+          fi

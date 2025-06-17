@@ -2,6 +2,9 @@
 import { ThreeDMarquee } from "@/components/ui/3d-marquee";
 import { BackgroundBeams } from "@/components/ui/background-beams";
 
+// ⭐ DISABLE STATIC GENERATION - Fix Clerk build issue
+export const dynamic = 'force-dynamic';
+
 export default function ThreeDMarqueeDemo() {
   const images = [
     "https://assets.aceternity.com/cloudinary_bkp/3d-card.png",
@@ -36,12 +39,11 @@ export default function ThreeDMarqueeDemo() {
     "https://assets.aceternity.com/wobble-card.png",
     "https://assets.aceternity.com/world-map.webp",
   ];
+  
   return (
-    
-
-     <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black relative">
-    <BackgroundBeams />
-     <ThreeDMarquee images={images} />
+    <main className="min-h-screen bg-gradient-to-b from-gray-900 to-black relative">
+      <BackgroundBeams />
+      <ThreeDMarquee images={images} />
     </main>
   );
 }
