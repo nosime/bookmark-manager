@@ -1,0 +1,26 @@
+name: Next Deployment
+
+on:
+  push:
+    branches: [production]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy using ssh
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        password: ${{ secrets.PASSWORD }}
+        port: 22
+        script: |
+          cd /root/services/deploy-next-docker
+          git fetch origin
+          git checkout production
+          git pull
+          docker build -t my-blog .
+          docker stop my-blog || true
+          docker rm my-blog || true
+          docker run -d --name my-blog --network opt_cloudflare_network -p 4000:3000 my-blog
