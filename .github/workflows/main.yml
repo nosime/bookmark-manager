@@ -41,7 +41,7 @@ jobs:
             -e POSTGRES_DB=bookmark_manager \
             -e POSTGRES_USER=bookmark_user \
             -e POSTGRES_PASSWORD=bookmark123 \
-            -p 5432:5432 \
+            -p 5433:5432 \
             -v bookmark_postgres_data:/var/lib/postgresql/data \
             postgres:16-alpine
           
@@ -52,9 +52,10 @@ jobs:
           docker run -d \
             --name bookmark-app \
             --restart unless-stopped \
-            -p 4000:3000 \
+            -p 4001:3000 \
+            --link bookmark-postgres \
             -e NODE_ENV=production \
-            -e DATABASE_URL="postgresql://bookmark_user:bookmark123@localhost:5432/bookmark_manager" \
+            -e DATABASE_URL="postgresql://bookmark_user:bookmark123@bookmark-postgres:5432/bookmark_manager" \
             -e NEXT_PUBLIC_APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}" \
             -e NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}" \
             -e CLERK_SECRET_KEY="${{ secrets.CLERK_SECRET_KEY }}" \
@@ -65,12 +66,12 @@ jobs:
             -e NEXT_TELEMETRY_DISABLED=1 \
             -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
             -e SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
-            --network host \
+            
             bookmark-manager:latest
           
           # Wait and verify deployment
           sleep 20
-          if curl -f http://localhost:4000/api/health; then
+          if curl -f http://localhost:4001/api/health; then
             echo "✅ Deployment successful!"
           else
             echo "❌ Deployment failed!"
