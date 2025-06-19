@@ -66,7 +66,6 @@ jobs:
             -e NEXT_TELEMETRY_DISABLED=1 \
             -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
             -e SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
-            
             bookmark-manager:latest
           
           # Wait and verify deployment
