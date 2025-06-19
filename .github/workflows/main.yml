@@ -38,6 +38,7 @@ jobs:
           docker run -d \
             --name bookmark-postgres \
             --restart unless-stopped \
+            --network opt_cloudflare_network
             -e POSTGRES_DB=bookmark_manager \
             -e POSTGRES_USER=bookmark_user \
             -e POSTGRES_PASSWORD=bookmark123 \
@@ -54,6 +55,7 @@ jobs:
             --restart unless-stopped \
             -p 4001:3000 \
             --link bookmark-postgres \
+            --network opt_cloudflare_network
             -e NODE_ENV=production \
             -e DATABASE_URL="postgresql://bookmark_user:bookmark123@bookmark-postgres:5432/bookmark_manager" \
             -e NEXT_PUBLIC_APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}" \
